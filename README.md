@@ -55,6 +55,23 @@ CdkStack.BenchmarkInstanceHostname = <BENCHMARKINSTANCEHOST>
 CdkStack.ECRRepoURI = <ECRREPOURI>
 ```
 
+### Modify PAT proxy code
+The PAT proxy code might need to be modified depending on the URL path you want to utilize. Currently the PAT proxy is designed to proxy a URL in the following format: https://domain.com/git/REPOID.
+
+In order to change this behavior you will need to modify the following pieces of code in src/main.go:
+
+```
+...
+// Change the first parameter to the path you want to proxy
+http.HandleFunc("/git/", ProxyRequestHandler(proxy))
+...
+// This updates the proxied URL to ensure it works with CodeCommit which expects to see a URL of /v1/repos/REPOID
+req.URL.Path = strings.ReplaceAll(req.URL.Path,"/v1/repos/git/","/v1/repos/")
+...
+```
+
+
+
 ### Build and deploy PAT proxy container image
 
 #### Prerequisites
