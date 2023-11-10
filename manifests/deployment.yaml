@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: patproxy
+  namespace: patproxy
+spec:
+  selector:
+    matchLabels:
+      app: patproxy
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: patproxy
+    spec:
+      serviceAccountName: iamserviceaccount
+      containers:
+        - name: patproxy
+          image: <acctid>.dkr.ecr.us-east-1.amazonaws.com/patproxy:latest
+          imagePullPolicy: Always
+          env:
+          - name: PATTABLENAME
+            value: "CodeCommitPATPatTable"
+          - name: SSLCERT
+            value: "/app/ssl/tls.crt"
+          - name: SSLKEY
+            value: "/app/ssl/tls.key"
+          - name: GITURL
+            value: "https://git-codecommit.us-east-1.amazonaws.com/v1/repos"
+          ports:
+            - containerPort: 8443
+          volumeMounts:
+            - name: tlscerts
+              mountPath: /app/ssl
+              readOnly: true
+      volumes:
+        - name: tlscerts
+          secret:
+            secretName: patproxy-tls
