@@ -16,7 +16,7 @@ spec:
       serviceAccountName: iamserviceaccount
       containers:
         - name: patproxy
-          image: <acctid>.dkr.ecr.us-east-1.amazonaws.com/patproxy:latest
+          image: acctid.dkr.ecr.region.amazonaws.com/patproxy:latest
           imagePullPolicy: Always
           env:
           - name: PATTABLENAME
@@ -26,7 +26,7 @@ spec:
           - name: SSLKEY
             value: "/app/ssl/tls.key"
           - name: GITURL
-            value: "https://git-codecommit.us-east-1.amazonaws.com/v1/repos"
+            value: "https://git-codecommit.region.amazonaws.com/v1/repos"
           ports:
             - containerPort: 8443
           volumeMounts:

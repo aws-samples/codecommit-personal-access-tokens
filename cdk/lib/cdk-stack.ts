@@ -146,6 +146,8 @@ export class CdkStack extends cdk.Stack {
       ]
     }));
 
+    serviceAccount.node.addDependency(patProxyNamespace);
+
     //this will create the NodeGroup in the cluster
     const codecommitPATEKSClusterNodeGroup = new eks.Nodegroup(this, 'CodeCommitPATEKSClusterNodeGroup', {
       nodegroupName: "CodeCommitPATEKSClusterNodeGroup",
@@ -210,11 +212,13 @@ export class CdkStack extends cdk.Stack {
       repository: 'https://charts.jetstack.io',
       namespace: certManagerNamespace,
       release: 'cert-manager',
-      version: 'v1.12.0',
+      createNamespace: true,
+      version: 'v1.13.2',
       wait: true,
       timeout: cdk.Duration.minutes(15),
       values: {
-        "installCRDs": true
+        "installCRDs": true,
+        "startupapicheck.timeout": "5m",
       }
     });
 
@@ -273,87 +277,5 @@ export class CdkStack extends cdk.Stack {
       methods: [ apigateway.HttpMethod.POST, apigateway.HttpMethod.GET ],
       integration: managementLambdaIntegration,
     });
-
-    const benchmarkAsset = new s3Assets.Asset(this, 'benchmarkAsset', {
-      path: path.join(__dirname, '../../benchmark'),
-    });
-
-    const benchmarkInstanceKeyPair = new ec2.CfnKeyPair(this, 'benchmarkInstanceKeyPair', {
-      keyName: 'benchmarkInstanceKeyPair',
-    });
-
-    const benchmarkPolicy = new iam.PolicyDocument({
-      statements: [
-        new iam.PolicyStatement({
-          actions: ['s3:GetObject'],
-          resources: ['arn:aws:s3:::'+benchmarkAsset.s3BucketName+'/'+benchmarkAsset.s3ObjectKey],
-        }),
-        new iam.PolicyStatement({
-          actions: ['execute-api:Invoke'],
-          resources: ['arn:aws:execute-api:'+process.env.CDK_DEFAULT_REGION+':'+process.env.CDK_DEFAULT_ACCOUNT+':'+ManagementAPIGatewayIntegration.apiId+'/*/POST/*'],
-        }),
-      ],
-    });
-
-    const benchmarkRole = new iam.Role(this, 'benchmarkRole', {
-      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      description: 'Allow EC2 to copy benchmark asset files.',
-      inlinePolicies: {
-        BenchmarkPolicy: benchmarkPolicy,
-      },
-    });
-
-    benchmarkRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName("CloudWatchAgentServerPolicy"));
-
-    const defaultVpc = ec2.Vpc.fromLookup(this, 'DefaultVPC', { isDefault: true });
-
-    const benchmarkSG = new ec2.SecurityGroup(this, 'benchmarkSG', {
-      vpc: defaultVpc,
-      allowAllOutbound: true,
-      description: 'Security group for benchmarking instance',
-    });
-
-    benchmarkSG.addIngressRule(
-      ec2.Peer.prefixList("pl-4e2ece27"),
-      ec2.Port.tcp(22),
-      'allow SSH access from Prefix list',
-    );	
-
-    const benchmarkInstance = new ec2.Instance(this, 'benchmarkInstance', {
-      vpc: defaultVpc,
-      securityGroup: benchmarkSG,
-      associatePublicIpAddress: true,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.XLARGE4),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
-      role: benchmarkRole,
-      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      keyName: 'benchmarkInstanceKeyPair',
-      requireImdsv2: true,
-      blockDevices: [
-        {
-          deviceName: '/dev/xvda',
-          volume: ec2.BlockDeviceVolume.ebs(50, {
-            encrypted: true,
-          }),
-        }
-      ]
-    });
-
-    benchmarkInstance.addUserData(`
-      su - ec2-user
-      curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash
-      . ~/.nvm/nvm.sh
-      nvm install --lts
-      sudo yum install nodejs npm --enablerepo=epel -y
-      aws s3 cp `+benchmarkAsset.s3ObjectUrl+` /home/ec2-user/
-      mkdir /home/ec2-user/benchmark/
-      unzip /home/ec2-user/`+benchmarkAsset.s3ObjectKey+` -d /home/ec2-user/benchmark/
-      cd /home/ec2-user/benchmark/
-      npm install --yes
-      chmod +x /home/ec2-user/benchmark/k6
-    `);
-
-    new cdk.CfnOutput(this, 'BenchmarkInstanceHostname', { value: benchmarkInstance.instancePublicDnsName });
-
   }
 }

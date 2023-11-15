@@ -34,15 +34,25 @@ npm install -g aws-cdk
 cdk bootstrap aws://ACCOUNT-NUMBER/REGION
 ```
 
-3. Deploy the cdk package.
+3. Build dependencies for managementLambda.
+```
+cd cdk\app\managementLambda
+npm install
+```
 
+4. Build dependencies for cdk package.
 ```
 cd cdk
 npm install
+```
+
+5. Deploy the cdk package.
+
+```
 cdk deploy 
 ```
 
-4. There are several outputs that you should note:
+6. There are several outputs that you should note:
 
 ```
 Outputs:
@@ -69,8 +79,6 @@ http.HandleFunc("/git/", ProxyRequestHandler(proxy))
 req.URL.Path = strings.ReplaceAll(req.URL.Path,"/v1/repos/git/","/v1/repos/")
 ...
 ```
-
-
 
 ### Build and deploy PAT proxy container image
 
@@ -156,6 +164,61 @@ kubectl config use-context arn:aws:eks:<REGION>:<ACCTID>:cluster/CodeCommitPATEK
 kubectl apply -f ./manifests/cert.yaml
 kubectl apply -f ./manifests/deployment.yaml
 kubectl apply -f ./manifests/service.yaml
+```
+
+4. After the deployment, the AWS Load Balancer controller will create the network load balancer which will provide network access to the proxy. You can login to the AWS console to find the URL.
+
+Example URL:
+```
+k8s-patproxy-patproxy-0744f6993c-c6b0166ef7e80b65.elb.us-east-1.amazonaws.com
+```
+
+### Using the proxy
+
+#### Prerequisites
+
+* Codecommit Repository
+
+#### Instructions
+
+1. In order to use the proxy you will need to create a personal access token (PAT). The prototype provides an CLI tool that can generate a PAT for you.
+
+Note the API Gateway URL:
+```
+CdkStack.APIGATEWAYURL = https://8kzzouie6c.execute-api.us-east-1.amazonaws.com
+```
+
+2. Build the dependencies for the CLI.
+
+```
+cd cli
+npm install
+```
+
+3. Create a PAT.
+
+```
+node .\index.js generatetoken --apiurl <APIGATEWAYURL> --repoid <REPOID> --username <USERNAME> --expiration <EXPIRATIONDATE (i.e 8/23/2023)>
+{ token: '3VT89xr/G/4Xr6tUzOaWE4X5XFc=' }
+```
+
+4. You can now clone your CodeCommit repo utilizing the PAT generated earlier. For the purposes of the prototype, we are utilizing a self signed certificate for the proxy. Because of this, we need to set http.sslVerify to false on the git client. 
+
+```
+git -c http.sslVerify=false clone https://k8s-patproxy-patproxy-0744f6993c-c6b0166ef7e80b65.elb.us-east-1.amazonaws.com/git/<REPOID>
+```
+
+5. Depending on your client you will be asked for your credentials. The username would be the username created with the PAT and the password would be the PAT itself.
+
+```
+...
+Cloning into 'Test2'...
+Username for 'https://k8s-patproxy-patproxy-0744f6993c-c6b0166ef7e80b65.elb.us-east-1.amazonaws.com/git/<REPOID>': username
+Password for 'https://username@k8s-patproxy-patproxy-0744f6993c-c6b0166ef7e80b65.elb.us-east-1.amazonaws.com/git/<REPOID>':
+remote: Counting objects: 3206, done.
+Receiving objects: 100% (3206/3206), 1.23 MiB | 1.76 MiB/s, done.
+Resolving deltas: 100% (1429/1429), done.
+Updating files: 100% (5004/5004), done.
 ```
 
 ### Updating PAT Proxy Image
